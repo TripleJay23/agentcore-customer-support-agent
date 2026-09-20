@@ -150,14 +150,14 @@ Agent: "Yes Jane, I remember your name and that you prefer concise responses. Ho
 ### Scenario 5: Deterministic Loyalty Calculation
 
 ```text
-Customer: "Calculate my loyalty discount for a $200 order. I have 4,000 points to redeem and I am Gold tier."
+Customer: "Calculate my loyalty discount for a $200 order, I have 4,250 points and I am Gold tier."
 Agent: "Here is your loyalty discount breakdown:
-- Points redeemed: 4,000 points
-- Points discount: $40.00
+- Points redeemed: 4,250 points
+- Points discount: $42.50
 - Gold tier discount percentage: 10%
-- Tier discount amount: $16.00
-- Final total: $144.00
-- Points earned: 144 points
+- Tier discount amount: $15.75
+- Final total: $141.75
+- Points earned: 141 points
 - Remaining points: 394 points
 Your total savings from both discounts were $56.00, reducing your original $200 order to the final total of $144.00."
 ```
