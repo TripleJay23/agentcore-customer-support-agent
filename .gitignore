@@ -1,0 +1,51 @@
+# Environment and Secrets
+.env
+.env.*
+!.env.example
+.aws/
+aws_credentials*
+credentials
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python Bytecode and Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# AgentCore Runtime and Deployment Caches
+.bedrock_agentcore/
+.bedrock_agentcore.yaml
+
+# Build and Packaging
+build/
+dist/
+*.egg-info/
+*.zip
+*.tar.gz
+
+# System and Editor Artifacts
+.DS_Store
+Thumbs.db
+.vscode/settings.json
+.idea/
+*.swp
+*~
+
+# Logs and Scratch Files
+*.log
+logs/
+scratch/
