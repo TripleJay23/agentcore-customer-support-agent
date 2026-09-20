@@ -82,7 +82,7 @@ Each component in the architecture has a strictly separated responsibility:
 | **AgentCore Gateway / MCP** | Decouples backend tools from the agent using the Model Context Protocol (MCP). Dynamically advertises tool schemas to the model over HTTP streamable connections. |
 | **Bedrock Knowledge Base** | Indexes unstructured store documentation (`data/product_catalog.txt`) and performs vector retrieval to ground answers in factual policies. |
 | **AgentCore Memory** | Observes user and assistant messages via Strands event hooks (`MessageAddedEvent`, `AfterInvocationEvent`), retrieving semantic customer context and recording interactions. |
-| **Code Interpreter** | Runs an isolated Python execution environment for loyalty discount math, eliminating LLM arithmetic errors. Includes automatic local fallback logic. |
+| **Code Interpreter** | Runs an isolated Python execution environment for loyalty discount math, reducing reliance on LLM arithmetic. Includes automatic local fallback logic. |
 | **AgentCore Browser** | Manages ephemeral, sandboxed browser sessions to fetch live web page content when requested. |
 | **AWS Lambda** | Implements the core business logic for order queries (`order_tracker.py`) and refund actions (`refund_processor.py`). |
 | **Amazon API Gateway** | Acts as the REST proxy layer between the AgentCore Gateway and the order tracking Lambda microservice. |
@@ -222,7 +222,7 @@ Long-term customer memory extraction and cross-session retrieval using AgentCore
 
 ### 5. Deterministic Loyalty Calculation
 
-Sandboxed Python execution via AgentCore Code Interpreter eliminating LLM arithmetic hallucination:
+Sandboxed Python execution via AgentCore Code Interpreter reducing reliance on LLM arithmetic:
 
 ![Loyalty Calculation](docs/images/loyalty-calculation.png)
 

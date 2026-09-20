@@ -14,7 +14,7 @@ graph TD
     Runtime[AgentCore Runtime / BedrockAgentCoreApp]
     Agent[Strands Agent Orchestrator]
     Nova[Amazon Nova 2 Lite Model]
-    
+
     subgraph Tooling Layer
         Gateway[AgentCore Gateway / MCP Interface]
         KBTool[Knowledge Base RAG Tool]
