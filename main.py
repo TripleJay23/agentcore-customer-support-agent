@@ -13,12 +13,11 @@ Capabilities:
   6. Live web content retrieval via AgentCore Browser
 """
 
-import argparse
-import asyncio
 import json
 import logging
+import math
 import os
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 
 import boto3
@@ -35,7 +34,11 @@ from strands.hooks import (
 )
 from strands.models import BedrockModel
 from strands.tools.mcp.mcp_client import MCPClient
-from strands_tools.browser import AgentCoreBrowser
+
+try:
+    from strands_tools.browser import AgentCoreBrowser
+except ImportError:
+    AgentCoreBrowser = None  # type: ignore
 
 # Load local environment variables if python-dotenv is present
 try:
@@ -311,7 +314,7 @@ def search_knowledge_base(query: str) -> str:
         )
     except Exception as exc:
         logger.warning("Knowledge base retrieval failed: %s", exc)
-        return f"Knowledge base search failed: {exc}"
+        return "Knowledge base search is temporarily unavailable."
 
     results = resp.get("retrievalResults", [])
 
@@ -331,6 +334,80 @@ def search_knowledge_base(query: str) -> str:
         return f"No information found for: {query}"
 
     return "\n---\n".join(chunks)
+
+
+def calculate_loyalty_values(
+    loyalty_points: int,
+    tier: str,
+    order_total: float,
+    product_category: str = "standard",
+) -> Dict[str, Any]:
+    """
+    Pure calculation helper implementing the loyalty program business logic.
+
+    Business Rules:
+      - loyalty points cannot be negative (clamped to 0)
+      - order total cannot be negative (clamped to 0.0)
+      - points redeem only in blocks of 500
+      - 100 points = $1
+      - point redemption can cover at most 50% of order total
+      - Tier discount rates: Silver = 0%, Gold = 10%, Platinum = 15% (unknown = 0%)
+      - Tier discount is applied after points redemption (on subtotal after points)
+      - Category earn rates: standard = 1, device = 2, fresh = 5 (unknown = 1)
+      - Points earned are based on final total (floor(final_total * earn_rate))
+      - remaining points = initial points - redeemed points + earned points
+    """
+    safe_points = max(0, int(loyalty_points))
+    normalized_tier = str(tier).strip().title()
+    safe_order_total = max(0.0, float(order_total))
+    normalized_category = str(product_category).strip().lower()
+
+    earn_rates = {
+        "standard": 1,
+        "device": 2,
+        "fresh": 5,
+    }
+    tier_rates = {
+        "Silver": 0.00,
+        "Gold": 0.10,
+        "Platinum": 0.15,
+    }
+
+    earn_rate = earn_rates.get(normalized_category, earn_rates["standard"])
+    tier_rate = tier_rates.get(normalized_tier, 0.00)
+
+    # Points can only be redeemed in blocks of 500
+    redeemable_from_balance = (safe_points // 500) * 500
+
+    # 100 points = $1. Points may cover at most 50% of the order
+    max_redemption_dollars = safe_order_total * 0.50
+    max_points_for_order = math.floor((max_redemption_dollars * 100) / 500) * 500
+
+    points_redeemed = min(redeemable_from_balance, max_points_for_order)
+    points_discount = points_redeemed / 100.0
+
+    subtotal_after_points = max(0.0, safe_order_total - points_discount)
+    tier_discount = round(subtotal_after_points * tier_rate, 2)
+    final_total = round(subtotal_after_points - tier_discount, 2)
+    total_savings = round(safe_order_total - final_total, 2)
+    points_earned = math.floor(final_total * earn_rate)
+    remaining_points = safe_points - points_redeemed + points_earned
+
+    return {
+        "loyalty_points": safe_points,
+        "tier": normalized_tier,
+        "order_total": round(safe_order_total, 2),
+        "product_category": normalized_category,
+        "earn_rate": earn_rate,
+        "points_redeemed": points_redeemed,
+        "points_discount": round(points_discount, 2),
+        "tier_discount_rate": tier_rate,
+        "tier_discount": tier_discount,
+        "total_savings": total_savings,
+        "final_total": final_total,
+        "points_earned": points_earned,
+        "remaining_points": remaining_points,
+    }
 
 
 # ── Loyalty Discount Tool (Code Interpreter) ──────────────────────────────────
@@ -462,43 +539,19 @@ print(json.dumps(result))
                 "Code Interpreter returned no result event."
             )
 
-    except Exception as e:
-        # Graceful fallback: calculate tier discount locally
-        tier_rates = {
-            "Silver": 0.00,
-            "Gold": 0.10,
-            "Platinum": 0.15,
-        }
-
-        normalized_tier = tier.title()
-        tier_rate = tier_rates.get(normalized_tier, 0.00)
-
-        safe_total = max(0.0, float(order_total))
-        tier_discount = round(
-            safe_total * tier_rate,
-            2,
+    except Exception as exc:
+        logger.warning(
+            "Code Interpreter execution failed: %s; using local fallback",
+            exc,
         )
-        final_total = round(
-            safe_total - tier_discount,
-            2,
+        fallback_result = calculate_loyalty_values(
+            loyalty_points=loyalty_points,
+            tier=tier,
+            order_total=order_total,
+            product_category=product_category,
         )
-
-        return json.dumps({
-            "loyalty_points": max(0, int(loyalty_points)),
-            "tier": normalized_tier,
-            "order_total": round(safe_total, 2),
-            "product_category": product_category.lower(),
-            "points_redeemed": 0,
-            "points_discount": 0.0,
-            "tier_discount_rate": tier_rate,
-            "tier_discount": tier_discount,
-            "total_savings": tier_discount,
-            "final_total": final_total,
-            "points_earned": 0,
-            "remaining_points": max(0, int(loyalty_points)),
-            "fallback": True,
-            "error": str(e),
-        })
+        fallback_result["fallback"] = True
+        return json.dumps(fallback_result)
 
 
 # ── Agent Entrypoint ──────────────────────────────────────────────────────────
@@ -530,13 +583,18 @@ async def invoke(payload, context=None):
         memory_id=MEMORY_ID,
     )
 
-    agent_core_browser = AgentCoreBrowser(region=REGION)
-
     tools = [
         search_knowledge_base,
         calculate_loyalty_discount,
-        agent_core_browser.browser,
     ]
+
+    if AgentCoreBrowser is not None:
+        agent_core_browser = AgentCoreBrowser(region=REGION)
+        tools.append(agent_core_browser.browser)
+    else:
+        logger.warning(
+            "AgentCoreBrowser not available; browser tool disabled."
+        )
 
     system_prompt = """
 You are a helpful, accurate AI customer-support agent for an online store.
@@ -640,21 +698,7 @@ GENERAL BEHAVIOR
 
     except Exception as exc:
         logger.exception("Agent invocation failed")
-        return (
-            "I encountered an error while processing your request: "
-            f"{exc}"
-        )
-
-
-def main():
-    """Run one invocation from the command line for local testing."""
-    parser = argparse.ArgumentParser(
-        description="Run local AgentCore customer support agent test"
-    )
-    parser.add_argument("payload", type=str, help="JSON invocation payload")
-    args = parser.parse_args()
-    response = asyncio.run(invoke(json.loads(args.payload)))
-    print(response)
+        return "I encountered an internal error while processing your request."
 
 
 if __name__ == "__main__":

@@ -81,7 +81,7 @@ graph TD
 2. **Refund Processor (`lambda/refund_processor.py`)**:
    - Direct Gateway Lambda target invocation.
    - Parses `bedrockAgentCoreToolName` from `context.client_context.custom`.
-   - Generates unique refund IDs (`REF-XXXXXXXX`), validates refund parameters, and issues pre-signed return label URLs.
+   - Generates unique refund IDs (`REF-XXXXXXXX`), returns structured approval responses, supports refund status checks, and issues simulated return label URLs.
    - Tool interface schema defined in `lambda/lambda_schema.json`.
 
 ### 2.5 Knowledge Base Retrieval-Augmented Generation (RAG)
@@ -106,7 +106,7 @@ graph TD
 - **Service**: Amazon Bedrock AgentCore Code Interpreter.
 - **Rationale**: Provides deterministic execution of explicit Python business logic that reduces arithmetic errors and avoids relying on the LLM for calculations.
 - **Execution**: The tool constructs an exact Python script, dispatches it to `code_session(REGION).invoke("executeCode", ...)`, and executes within a managed isolated execution environment.
-- **Graceful Degradation**: If the Code Interpreter service endpoint is unreachable or disabled, the tool automatically falls back to a deterministic local Python calculation of the customer tier discount.
+- **Graceful Degradation**: If the Code Interpreter service endpoint is unreachable or disabled, the tool automatically falls back to a deterministic local Python calculation (`calculate_loyalty_values`) that produces functionally identical business results.
 
 ### 2.8 Live Web Retrieval (`AgentCoreBrowser`)
 
@@ -183,4 +183,4 @@ sequenceDiagram
 1. **Decoupled Gateway Permissions**: The agent runtime does not require direct VPC access or database credentials; it communicates exclusively via HTTP to the AgentCore Gateway.
 2. **Environment Variable Configuration**: Zero hard-coded infrastructure values. All ARNs, Gateway URLs, Knowledge Base IDs, and Memory IDs are injected at runtime via environment variables.
 3. **Execution Sandbox**: The Code Interpreter runs arbitrary Python calculations in a managed isolated execution environment without access to the host agent container.
-4. **Memory Partitioning**: Memory namespaces are partitioned by strategy and customer actor ID (`cs_agent/{actorId}/facts`, `cs_agent/{actorId}/preferences`), ensuring tenant data isolation.
+4. **Customer Memory Partitioning**: Memory namespaces are partitioned by strategy and customer actor ID (`cs_agent/{actorId}/facts`, `cs_agent/{actorId}/preferences`), providing application-level separation of customer memory records.

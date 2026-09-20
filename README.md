@@ -2,7 +2,7 @@
 
 A multi-capability AI customer-support system built with **Amazon Bedrock AgentCore**, **Strands Agents**, **AgentCore Gateway (MCP)**, **Amazon Bedrock Knowledge Bases**, and **AgentCore Memory**.
 
-The system demonstrates a single-agent, multi-tool architecture that unifies real-time tool execution, semantic document retrieval (RAG), cross-session customer memory, sandboxed deterministic computation, live browser automation, and serverless backend integrations into a robust customer-facing agent.
+The system demonstrates a single-agent, multi-tool architecture that unifies tool execution, semantic document retrieval (RAG), cross-session customer memory, sandboxed deterministic computation, live browser automation, and serverless backend integrations into a robust customer-facing agent.
 
 ---
 
@@ -62,8 +62,8 @@ graph TD
 
 The customer support agent implements and verifies six distinct capabilities:
 
-1. **Order Tracking**: Looks up real-time order status, carrier information, estimated delivery dates, and customer purchase history via the AgentCore Gateway.
-2. **Refund Processing**: Initiates formal refund requests, checks pending refund statuses, and generates prepaid return shipping labels via serverless backend tools.
+1. **Order Tracking**: Looks up order status, carrier and shipment status, estimated delivery dates, and customer purchase history from the sample customer/order backend via the AgentCore Gateway.
+2. **Refund Processing**: Structured refund initiation, approval response, unique refund ID generation, refund status lookup, and simulated return-label generation via AWS Lambda.
 3. **Knowledge-Base RAG**: Retrieves accurate product specifications, return windows, warranty details, and store policies from an Amazon Bedrock Knowledge Base backed by Amazon S3.
 4. **Cross-Session Long-Term Memory**: Automatically extracts and persists customer facts and user preferences across separate runtime sessions using AgentCore Memory.
 5. **Deterministic Loyalty Calculations**: Uses AgentCore Code Interpreter to execute exact arithmetic for multi-tier discounts, points redemption, and reward accrual in a secure Python sandbox.
@@ -180,10 +180,10 @@ Agent: "The current page title of https://www.udacity.com is: 'Learn the Latest 
 The capabilities of this agent were validated end-to-end against live AWS infrastructure in a deployed AgentCore Runtime environment. The following scenarios were exercised:
 
 - **Gateway Tool Invocation**: Verified dynamic MCP discovery and successful tool routing over streamable HTTP to AWS Lambda and Amazon API Gateway.
-- **Refund Processing**: Confirmed automated refund approval, generated unique refund IDs, and validated parameter validation.
+- **Refund Processing**: Confirmed MCP tool routing, Lambda invocation, unique refund ID generation, structured approval responses, refund status lookup, and simulated return-label generation.
 - **Knowledge Base RAG**: Verified semantic vector retrieval over product specs, return windows, and loyalty tiers from Amazon S3-backed Knowledge Bases.
 - **Cross-Session Memory**: Verified multi-turn persistence across independent session IDs using AgentCore Memory strategies (`SEMANTIC` facts and `USER_PREFERENCE`).
-- **Code Interpreter Execution**: Validated deterministic Python execution in a managed isolated execution environment with graceful local arithmetic fallback.
+- **Code Interpreter Execution**: Validated deterministic Python execution in a managed isolated execution environment with a functionally equivalent local arithmetic fallback.
 - **AgentCore Browser**: Validated sandboxed headless browser initialization and live web page extraction.
 - **Deployed Runtime**: Verified execution on AWS Bedrock AgentCore Runtime with CloudWatch logging and observability.
 
@@ -198,13 +198,13 @@ Sanitized execution evidence captured from the live Amazon Bedrock AgentCore dep
 
 ### 1. Order Tracking via MCP Gateway
 
-Real-time carrier lookup and status verification via AgentCore Gateway and Amazon API Gateway:
+Carrier and shipment status lookup via AgentCore Gateway and Amazon API Gateway (sample order backend):
 
 ![Order Tracking](docs/images/order-tracking.png)
 
 ### 2. Refund Processing via AWS Lambda
 
-Automated return eligibility evaluation, refund approval, and refund ID generation:
+Structured refund initiation, approval response, and refund ID generation via AWS Lambda:
 
 ![Refund Processing](docs/images/refund-processing.png)
 
@@ -246,6 +246,10 @@ agentcore-customer-support-agent/
 ├── .env.example               # Configuration template with non-sensitive placeholders
 ├── .gitignore                 # Exclusion rules for secrets, caches, and virtualenvs
 │
+├── .github/
+│   └── workflows/
+│       └── ci.yml             # GitHub Actions CI workflow (syntax & offline tests)
+│
 ├── data/
 │   └── product_catalog.txt    # Canonical product catalog & policy reference for RAG
 │
@@ -259,7 +263,8 @@ agentcore-customer-support-agent/
 │   └── lambda_schema.json     # Declarative JSON schema for Gateway tool parameters
 │
 └── tests/
-    └── test_lambda_handlers.py # Offline unit test suite for Lambda backend business logic
+    ├── test_lambda_handlers.py # Offline unit tests for Lambda backend handlers & routing
+    └── test_loyalty.py        # Offline unit tests for loyalty calculation business logic
 ```
 
 ---
@@ -293,7 +298,7 @@ cp .env.example .env
 
 ### Prerequisites
 
-- Python 3.10 to 3.14
+- Python >= 3.10 (validated with Python 3.13 in AgentCore runtime and Python 3.14 locally)
 - AWS CLI configured with appropriate credentials (if connecting to AWS services)
 - `uv` (recommended) or `pip`
 
@@ -334,17 +339,14 @@ To run the local AgentCore application server:
 python main.py
 ```
 
-Or run with the AgentCore CLI:
-
-```bash
-agentcore run
-```
-
 ---
 
 ## AWS Deployment
 
 Deployment to Amazon Bedrock AgentCore Runtime utilizes the AgentCore CLI and starter toolkit:
+
+> [!NOTE]
+> AgentCore deployment requires local AgentCore project configuration. Generated runtime/deployment configuration files are intentionally excluded from version control because they contain environment-specific infrastructure metadata.
 
 ```bash
 # Deploy the agent container to AgentCore Runtime
@@ -371,8 +373,8 @@ agentcore invoke '{"prompt": "What is the return window for electronics?", "cust
 
 - **Zero Secrets in Source**: All endpoints, resource identifiers, and credentials are externalized to environment variables.
 - **Isolated Execution**: Deterministic calculations run in a managed isolated execution environment via AgentCore Code Interpreter.
-- **Safe Fallback**: If the Code Interpreter service is unreachable, the tool gracefully falls back to deterministic local arithmetic.
-- **Tenant Isolation**: Long-term memories are strictly partitioned by customer actor ID and strategy namespaces (`cs_agent/{actorId}/facts`).
+- **Safe Fallback**: If the Code Interpreter service is unreachable, the tool gracefully falls back to deterministic local calculation (`calculate_loyalty_values`) preserving identical business calculations.
+- **Customer Memory Partitioning**: Long-term memories are partitioned by customer actor ID and strategy namespaces (`cs_agent/{actorId}/facts`, `cs_agent/{actorId}/preferences`), providing application-level separation of customer memory records.
 
 ### Recommended Production Enhancements
 
@@ -394,7 +396,7 @@ agentcore invoke '{"prompt": "What is the return window for electronics?", "cust
    Runtime conversation history handles immediate multi-turn context, whereas AgentCore Memory manages cross-session semantic facts and user preferences. Memory extraction is asynchronous, decoupling fast response generation from heavy fact extraction.
 
 3. **Deterministic Math via Code Interpreter**:
-   Rather than relying on the LLM's internal weights to compute multi-tier discounts and points conversions, the agent uses Code Interpreter for deterministic execution of explicit Python business logic that reduces arithmetic errors and avoids relying on the LLM for calculations, supported by an offline fallback.
+   Rather than relying on the LLM's internal weights to compute multi-tier discounts and points conversions, the agent uses Code Interpreter for deterministic execution of explicit Python business logic that reduces arithmetic errors and avoids relying on the LLM for calculations, supported by a functionally equivalent local fallback.
 
 4. **Grounding Knowledge via RAG vs. System Prompts**:
    Store policies and product specifications are retrieved dynamically from Bedrock Knowledge Bases rather than stuffed into system prompts. This reduces prompt token costs and ensures catalog updates take effect immediately without redeploying the agent.
@@ -406,7 +408,7 @@ agentcore invoke '{"prompt": "What is the return window for electronics?", "cust
 
 ## Technology Stack
 
-- **Language & Runtime**: Python (>=3.10)
+- **Language & Runtime**: Python (>=3.10; validated with Python 3.13 and Python 3.14)
 - **Agent Orchestration**: Amazon Bedrock AgentCore, Strands Agents SDK
 - **Foundation Model**: Amazon Nova 2 Lite (`global.amazon.nova-2-lite-v1:0`) via Amazon Bedrock
 - **Tool Protocols**: Model Context Protocol (MCP), Streamable HTTP Client

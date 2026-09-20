@@ -19,8 +19,6 @@ anyio==4.15.1
     #   starlette
 async-timeout==5.0.1 ; python_full_version < '3.11'
     # via aiohttp
-asyncio==4.0.0
-    # via agentcore-customer-support-agent
 attrs==26.1.0
     # via
     #   aiohttp
